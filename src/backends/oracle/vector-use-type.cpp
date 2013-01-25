@@ -128,21 +128,15 @@ void oracle_vector_use_type_backend::prepare_for_bind(
 
             std::size_t maxSize = 0;
             std::size_t const vecSize = v.size();
+            sizes_.resize(vecSize);
             prepare_indicators(vecSize);
             for (std::size_t i = 0; i != vecSize; ++i)
             {
                 std::size_t sz = v[i].length();
-                sizes_.push_back(static_cast<ub2>(sz));
                 maxSize = sz > maxSize ? sz : maxSize;
             }
 
             buf_ = new char[maxSize * vecSize];
-            char *pos = buf_;
-            for (std::size_t i = 0; i != vecSize; ++i)
-            {
-                strncpy(pos, v[i].c_str(), v[i].length());
-                pos += maxSize;
-            }
 
             oracleType = SQLT_CHR;
             data = buf_;
@@ -186,6 +180,7 @@ void oracle_vector_use_type_backend::bind_by_pos(int &position,
     if (type == x_stdstring)
     {
         sizesP = &sizes_[0];
+        maxSize_ = size;
     }
 
     sword res = OCIBindByPos(statement_.stmtp_, &bindp_,
@@ -213,6 +208,7 @@ void oracle_vector_use_type_backend::bind_by_name(
     if (type == x_stdstring)
     {
         sizesP = &sizes_[0];
+        maxSize_ = size;
     }
 
     sword res = OCIBindByName(statement_.stmtp_, &bindp_,
@@ -232,9 +228,19 @@ void oracle_vector_use_type_backend::pre_use(indicator const *ind)
     // first deal with data
     if (type_ == x_stdstring)
     {
-        // nothing to do - it's already done during bind
-        // (and it's probably impossible to separate them, because
-        // changes in the string size could not be handled here)
+        std::vector<std::string> *vp
+            = static_cast<std::vector<std::string> *>(data_);
+        std::vector<std::string> &v(*vp);
+
+        char *pos = buf_;
+        std::size_t const vecSize = v.size();
+        for (std::size_t i = 0; i != vecSize; ++i)
+        {
+            std::size_t sz = v[i].length();
+            sizes_[i] = static_cast<ub2>(sz);
+            strncpy(pos, v[i].c_str(), sz);
+            pos += maxSize_;
+        }
     }
     else if (type_ == x_long_long)
     {
